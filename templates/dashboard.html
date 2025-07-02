@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Validasi IoC NK-CSIRT</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='nkcsirt-logo.png') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .badge-danger { background-color: #dc3545; color: white; }
+        .badge-warning { background-color: #ffc107; color: #000; }
+        .badge-success { background-color: #28a745; color: white; }
+        .badge-info { background-color: #17a2b8; color: white; }
+        /* Tambahkan badge oranye untuk status sedang */
+        .badge-sedang { background-color: #fd7e14; color: #fff; }
+        .card-header { background-color: #f8f9fa; border-bottom: 2px solid #dee2e6; }
+        .stat-card { 
+            transition: transform 0.2s; 
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .stat-card:hover { transform: translateY(-5px); }
+        .navbar-brand { font-weight: bold; }
+        .table thead th { 
+            background-color: #343a40 !important; 
+            color: white !important;
+            border-color: #454d55 !important;
+        }
+        .severity-high { background-color: #dc3545; }
+        .severity-medium { background-color: #ffc107; color: #000; }
+        .severity-low { background-color: #28a745; }
+        .status-aman { color: #28a745; font-weight: bold; }
+        .status-berbahaya { color: #dc3545; font-weight: bold; }
+        .status-false-positive { color: #ffc107; font-weight: bold; }
+        .timestamp-text { font-size: 0.85rem; color: #6c757d; }
+        .ip-address { font-family: 'Courier New', monospace; font-weight: bold; }
+        .validation-score { 
+            background: linear-gradient(45deg, #007bff, #6610f2);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-dark shadow">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1 d-flex align-items-center">
+                <img src="{{ url_for('static', filename='nkcsirt-logo.png') }}" alt="NK-CSIRT Logo" style="height:40px; margin-right:12px;">
+                Dashboard Validasi IoC
+            </span>
+            <div class="navbar-text">
+                <small>
+                    <i class="fas fa-robot me-1"></i>Sistem Otomatis Validasi Indikator Kompromi
+                    <br>
+                    <i class="fas fa-clock me-1"></i>Update terakhir: <span id="lastUpdated">{{ last_updated if last_updated else 'Tidak diketahui' }}</span>
+                    <button class="btn btn-sm btn-outline-light ms-2" onclick="refreshDashboard()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </small>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Panel Statistik Dashboard -->
+    <div class="container-fluid mt-4">
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stat-card text-white bg-primary h-100">
+                    <div class="card-body d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3 class="card-title mb-1">{{ stats.total_alerts if stats else 0 }}</h3>
+                            <p class="card-text mb-0">Total Alert</p>
+                            <small class="opacity-75">Dari sistem deteksi</small>
+                        </div>
+                        <div>
+                            <i class="fas fa-exclamation-triangle fa-3x opacity-75"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stat-card text-white bg-danger h-100">
+                    <div class="card-body d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3 class="card-title mb-1">{{ stats.malicious_ips if stats else 0 }}</h3>
+                            <p class="card-text mb-0">IP Berbahaya</p>
+                            <small class="opacity-75">Teridentifikasi ancaman</small>
+                        </div>
+                        <div>
+                            <i class="fas fa-ban fa-3x opacity-75"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stat-card text-white bg-warning h-100">
+                    <div class="card-body d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3 class="card-title mb-1">{{ stats.false_positive if stats else 0 }}</h3>
+                            <p class="card-text mb-0">Verifikasi! </p>
+                            <small class="opacity-75">Perlu verifikasi manual</small>
+                        </div>
+                        <div>
+                            <i class="fas fa-question-circle fa-3x opacity-75"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stat-card text-white bg-success h-100">
+                    <div class="card-body d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3 class="card-title mb-1">{{ stats.safe_ips if stats else 0 }}</h3>
+                            <p class="card-text mb-0">IP Aman</p>
+                            <small class="opacity-75">Tidak ada ancaman</small>
+                        </div>
+                        <div>
+                            <i class="fas fa-check-circle fa-3x opacity-75"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabel Hasil Deteksi dari Suricata -->
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-search me-2 text-primary"></i>Hasil Validasi IoC
+                        </h5>
+                        <small class="text-muted">Data real-time dari sistem deteksi intrusi</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <!-- Tambahkan filter rentang tanggal -->
+                            <div class="d-flex justify-content-between mb-2 align-items-center flex-wrap">
+                                <div>
+                                    <label for="filterTanggal" class="form-label mb-0 me-2"><i class="fas fa-calendar-alt me-1"></i>Filter Tanggal:</label>
+                                    <input type="date" id="filterTanggalMulai" class="form-control d-inline-block" style="width: 170px;">
+                                    <span class="mx-2">s/d</span>
+                                    <input type="date" id="filterTanggalAkhir" class="form-control d-inline-block" style="width: 170px;">
+                                    <button class="btn btn-outline-primary btn-sm ms-2" onclick="applyDateFilter()">
+                                        <i class="fas fa-filter"></i> Terapkan
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm ms-1" onclick="resetDateFilter()">
+                                        <i class="fas fa-times"></i> Reset
+                                    </button>
+                                </div>
+                                <button class="btn btn-success btn-sm" onclick="downloadTableCSV()">
+                                    <i class="fas fa-download me-1"></i>Download CSV
+                                </button>
+                            </div>
+                            <table id="tabelAncaman" class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th><i class="fas fa-globe me-1"></i>Alamat IP Sumber</th>
+                                        <th><i class="fas fa-bullseye me-1"></i>IP Tujuan</th>
+                                        <th><i class="fas fa-tags me-1"></i>Jenis Ancaman</th>
+                                        <th><i class="fas fa-clock me-1"></i>Waktu Validasi</th>
+                                        <th><i class="fas fa-cogs me-1"></i>Module</th>
+                                        <th><i class="fas fa-shield-alt me-1"></i>Hasil Validasi TI</th>
+                                        <th class="status-akhir"><i class="fas fa-gavel me-1"></i>Status Akhir</th>
+                                        <th><i class="fas fa-cogs me-1"></i>Tindakan</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for result in results %}
+                                    <tr>
+                                        <td>
+                                            <div class="ip-address">{{ result.source_ip }}</div>
+                                        </td>
+                                        <td class="ip-address">{{ result.destination_ip }}</td>
+                                        <td>
+                                            <span class="badge severity-{{ result.severity }}">
+                                                <i class="fas fa-{% if result.severity == 'high' %}exclamation-triangle{% elif result.severity == 'medium' %}exclamation-circle{% else %}info-circle{% endif %} me-1"></i>
+                                                {{ result.rule }}
+                                            </span>
+                                            <br><small class="text-muted">Tingkat: {{ result.severity|title }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="timestamp-text">
+                                                {{ result.timestamp }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info">
+                                                <i class="fas fa-microchip me-1"></i>{{ result.module|upper }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="mb-1">
+                                                <strong>AlienVault OTX:</strong> 
+                                                <span class="badge 
+                                                    {% if result.results.otx == 'Berbahaya' %}bg-danger
+                                                    {% elif result.results.otx.startswith('Sedang') %}badge-sedang
+                                                    {% else %}bg-success{% endif %}">
+                                                    <i class="fas fa-{% if result.results.otx == 'Berbahaya' %}times
+                                                        {% elif result.results.otx.startswith('Sedang') %}exclamation-circle
+                                                        {% else %}check{% endif %} me-1"></i>
+                                                    {{ result.results.otx }}
+                                                </span>
+                                            </div>
+                                            <div class="mb-1">
+                                                <strong>MISP Platform:</strong>
+                                                <span class="badge 
+                                                    {% if result.results.misp == 'Berbahaya' %}bg-danger
+                                                    {% elif result.results.misp.startswith('Sedang') %}badge-sedang
+                                                    {% else %}bg-success{% endif %}">
+                                                    <i class="fas fa-{% if result.results.misp == 'Berbahaya' %}times
+                                                        {% elif result.results.misp.startswith('Sedang') %}exclamation-circle
+                                                        {% else %}check{% endif %} me-1"></i>
+                                                    {{ result.results.misp }}
+                                                </span>
+                                            </div>
+                                            <div class="mb-1">
+                                                <strong>Kaspersky TI:</strong>
+                                                <span class="badge 
+                                                    {% if result.results.kaspersky == 'Berbahaya' %}bg-danger
+                                                    {% elif result.results.kaspersky.startswith('Sedang') %}badge-sedang
+                                                    {% else %}bg-success{% endif %}">
+                                                    <i class="fas fa-{% if result.results.kaspersky == 'Berbahaya' %}times
+                                                        {% elif result.results.kaspersky.startswith('Sedang') %}exclamation-circle
+                                                        {% else %}check{% endif %} me-1"></i>
+                                                    {{ result.results.kaspersky }}
+                                                </span>
+                                            </div>
+                                            {% if result.total_malicious %}
+                                            <div class="mt-2">
+                                                <span class="validation-score">
+                                                    <i class="fas fa-chart-bar me-1"></i>Skor: {{ result.total_malicious }}
+                                                </span>
+                                            </div>
+                                            {% endif %}
+                                        </td>
+                                        <td class="status-akhir">
+                                            <span class="badge fs-6 
+                                                {% if result.conclusion == 'Berbahaya' %}bg-danger
+                                                {% elif result.conclusion == 'False Positive' %}bg-warning text-dark
+                                                {% elif result.conclusion.startswith('Sedang') %}badge-sedang
+                                                {% else %}bg-success{% endif %}">
+                                                <i class="fas 
+                                                    {% if result.conclusion == 'Berbahaya' %}fa-skull-crossbones
+                                                    {% elif result.conclusion == 'False Positive' %}fa-exclamation-triangle
+                                                    {% elif result.conclusion.startswith('Sedang') %}fa-exclamation-circle
+                                                    {% else %}fa-shield-check{% endif %} me-1"></i>
+                                                {{ result.conclusion }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group-vertical btn-group-sm" role="group">
+                                                <button class="btn btn-outline-info btn-sm" onclick="lihatDetailIP('{{ result.source_ip }}')">
+                                                    <i class="fas fa-info-circle me-1"></i>Detail
+                                                </button>
+                                                {% if result.conclusion == 'Berbahaya' %}
+                                                <button class="btn btn-outline-warning btn-sm" onclick="blokAlamatIP('{{ result.source_ip }}')">
+                                                    <i class="fas fa-ban me-1"></i>Blokir
+                                                </button>
+                                                <button class="btn btn-outline-danger btn-sm" onclick="laporkanAncaman('{{ result.source_ip }}')">
+                                                    <i class="fas fa-flag me-1"></i>Laporkan
+                                                </button>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ringkasan Validasi IP -->
+    <div class="container-fluid mt-4 mb-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-clipboard-list me-2 text-success"></i>Ringkasan Hasil Validasi IoC
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table id="tabelRingkasan" class="table table-striped table-hover">
+                                <thead class="table-secondary">
+                                    <tr>
+                                        <th><i class="fas fa-network-wired me-1"></i>Alamat IP</th>
+                                        <th><i class="fas fa-search me-1"></i>AlienVault OTX</th>
+                                        <th><i class="fas fa-database me-1"></i>MISP Platform</th>
+                                        <th><i class="fas fa-shield-virus me-1"></i>Kaspersky TI</th>
+                                        <th><i class="fas fa-calculator me-1"></i>Skor Ancaman</th>
+                                        <th><i class="fas fa-clipboard-check me-1"></i>Keputusan Akhir</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for ip in parsed_ips %}
+                                    <tr>
+                                        <td><span class="ip-address">{{ ip.value }}</span></td>
+                                        <td>
+                                            <span class="badge 
+                                                {% if ip.results.otx == 'Berbahaya' %}bg-danger
+                                                {% elif ip.results.otx.startswith('Sedang') %}badge-sedang
+                                                {% else %}bg-success{% endif %}">
+                                                <i class="fas fa-{% if ip.results.otx == 'Berbahaya' %}exclamation-triangle
+                                                    {% elif ip.results.otx.startswith('Sedang') %}exclamation-circle
+                                                    {% else %}check-circle{% endif %} me-1"></i>
+                                                {{ ip.results.otx }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge 
+                                                {% if ip.results.misp == 'Berbahaya' %}bg-danger
+                                                {% elif ip.results.misp.startswith('Sedang') %}badge-sedang
+                                                {% else %}bg-success{% endif %}">
+                                                <i class="fas fa-{% if ip.results.misp == 'Berbahaya' %}exclamation-triangle
+                                                    {% elif ip.results.misp.startswith('Sedang') %}exclamation-circle
+                                                    {% else %}check-circle{% endif %} me-1"></i>
+                                                {{ ip.results.misp }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge 
+                                                {% if ip.results.kaspersky == 'Berbahaya' %}bg-danger
+                                                {% elif ip.results.kaspersky.startswith('Sedang') %}badge-sedang
+                                                {% else %}bg-success{% endif %}">
+                                                <i class="fas fa-{% if ip.results.kaspersky == 'Berbahaya' %}exclamation-triangle
+                                                    {% elif ip.results.kaspersky.startswith('Sedang') %}exclamation-circle
+                                                    {% else %}check-circle{% endif %} me-1"></i>
+                                                {{ ip.results.kaspersky }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="validation-score">
+                                                <i class="fas fa-tachometer-alt me-1"></i>{{ ip.total_malicious if ip.total_malicious else 0 }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge fs-6 
+                                                {% if ip.conclusion == 'Berbahaya' %}bg-danger
+                                                {% elif ip.conclusion == 'False Positive' %}bg-warning text-dark
+                                                {% elif ip.conclusion.startswith('Sedang') %}badge-sedang
+                                                {% else %}bg-success{% endif %}">
+                                                <i class="fas 
+                                                    {% if ip.conclusion == 'Berbahaya' %}fa-skull-crossbones
+                                                    {% elif ip.conclusion == 'False Positive' %}fa-question-circle
+                                                    {% elif ip.conclusion.startswith('Sedang') %}fa-exclamation-circle
+                                                    {% else %}fa-shield-check{% endif %} me-1"></i>
+                                                {{ ip.conclusion }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Detail IP -->
+    <div class="modal fade" id="modalDetailIP" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-info-circle me-2"></i>Informasi Detail Alamat IP
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="isiModalDetail">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Sedang memuat data...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Mengambil informasi detail...</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>Tutup
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+    <script>
+        let refreshInterval;
+        
+        $(document).ready(function() {
+            // Inisialisasi tabel dengan bahasa Indonesia
+            const bahasaIndonesia = {
+                "sEmptyTable": "Tidak ada data yang tersedia dalam tabel",
+                "sInfo": "Menampilkan _START_ hingga _END_ dari _TOTAL_ entri",
+                "sInfoEmpty": "Menampilkan 0 hingga 0 dari 0 entri", 
+                "sInfoFiltered": "(difilter dari _MAX_ total entri)",
+                "sLengthMenu": "Tampilkan _MENU_ entri per halaman",
+                "sLoadingRecords": "Sedang memuat data...",
+                "sProcessing": "Sedang memproses...",
+                "sSearch": "Cari data:",
+                "sZeroRecords": "Tidak ditemukan data yang cocok",
+                "oPaginate": {
+                    "sFirst": "Pertama",
+                    "sLast": "Terakhir", 
+                    "sNext": "Berikutnya",
+                    "sPrevious": "Sebelumnya"
+                },
+                "oAria": {
+                    "sSortAscending": ": aktifkan untuk mengurutkan kolom naik",
+                    "sSortDescending": ": aktifkan untuk mengurutkan kolom turun"
+                }
+            };
+
+            // Tambahkan custom sorting untuk kolom status akhir
+            $.fn.dataTable.ext.order['status-akhir-sort'] = function(settings, col) {
+                return this.api().column(col, {order:'index'}).nodes().map(function(td, i) {
+                    // Ambil teks status akhir
+                    var text = $(td).text().trim();
+                    // Urutan: Berbahaya (1), False Positive (2), Tidak Berbahaya (3)
+                    if (text === 'Berbahaya') return 1;
+                    if (text === 'False Positive') return 2;
+                    return 3;
+                });
+            };
+
+            $('#tabelAncaman').DataTable({
+                order: [[3, 'desc']], // Kolom ke-3 (Waktu Validasi) diurutkan secara descending
+                pageLength: 25,
+                language: bahasaIndonesia,
+                responsive: true,
+                dom: '<"row"<"col-sm-6"l><"col-sm-6"f>>' +
+                     '<"row"<"col-sm-12"tr>>' +
+                     '<"row"<"col-sm-5"i><"col-sm-7"p>>',
+                columnDefs: [
+                    { targets: [5, 7], orderable: false }, // Kolom validasi dan aksi tidak bisa diurutkan
+                    { targets: 6, orderDataType: 'status-akhir-sort' } // Kolom status akhir pakai custom sort
+                ]
+            });
+
+            $('#tabelRingkasan').DataTable({
+                order: [[4, 'desc']], // Urutkan berdasarkan skor ancaman
+                pageLength: 25,
+                language: bahasaIndonesia,
+                responsive: true,
+                dom: '<"row"<"col-sm-6"l><"col-sm-6"f>>' +
+                     '<"row"<"col-sm-12"tr>>' +
+                     '<"row"<"col-sm-5"i><"col-sm-7"p>>'
+            });
+
+            // Auto refresh setiap 30 detik
+            startAutoRefresh();
+        });
+
+        function startAutoRefresh() {
+            // Refresh otomatis setiap 30 detik
+            refreshInterval = setInterval(function() {
+                refreshDashboard();
+            }, 30000);
+            
+            // Tambah indikator refresh
+            console.log('Auto-refresh dimulai (setiap 30 detik)');
+        }
+
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                console.log('Auto-refresh dihentikan');
+            }
+        }
+
+        function refreshDashboard() {
+            // Tampilkan loading indicator
+            showLoadingIndicator();
+            
+            // Fetch data terbaru dari API
+            $.ajax({
+                url: '/api/dashboard-data',
+                method: 'GET',
+                timeout: 10000,
+                success: function(response) {
+                    if (response.success) {
+                        updateDashboardData(response);
+                        $('#lastUpdated').text(response.last_updated);
+                        showSuccessMessage('Dashboard berhasil diperbarui');
+                    } else {
+                        showErrorMessage('Gagal memperbarui dashboard: ' + response.error);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error refreshing dashboard:', error);
+                    showErrorMessage('Gagal memperbarui dashboard. Silakan refresh halaman.');
+                },
+                complete: function() {
+                    hideLoadingIndicator();
+                }
+            });
+        }
+
+        let allResults = [];
+        let allParsedIps = [];
+
+        function updateDashboardData(data) {
+            try {
+                // Simpan semua data untuk filter tanggal
+                allResults = data.results || [];
+                allParsedIps = data.parsed_ips || [];
+
+                updateStatsCards(data.stats);
+                updateTables(allResults, allParsedIps);
+            } catch (error) {
+                console.error('Error updating dashboard:', error);
+                showErrorMessage('Terjadi kesalahan saat memperbarui tampilan');
+            }
+        }
+
+        function applyDateFilter() {
+            const mulai = $('#filterTanggalMulai').val();
+            const akhir = $('#filterTanggalAkhir').val();
+            if (!mulai && !akhir) {
+                updateTables(allResults, allParsedIps);
+                return;
+            }
+            // Filter berdasarkan rentang tanggal (inclusive)
+            const filteredResults = allResults.filter(function(item) {
+                if (!item.timestamp) return false;
+                const t = item.timestamp.slice(0, 10); // yyyy-mm-dd
+                if (mulai && t < mulai) return false;
+                if (akhir && t > akhir) return false;
+                return true;
+            });
+            const filteredParsedIps = allParsedIps.filter(function(item) {
+                if (!item.timestamp) return false;
+                const t = item.timestamp.slice(0, 10);
+                if (mulai && t < mulai) return false;
+                if (akhir && t > akhir) return false;
+                return true;
+            });
+            updateTables(filteredResults, filteredParsedIps);
+        }
+
+        function resetDateFilter() {
+            $('#filterTanggalMulai').val('');
+            $('#filterTanggalAkhir').val('');
+            updateTables(allResults, allParsedIps);
+        }
+
+        function updateStatsCards(stats) {
+            // Update nilai di stats cards
+            const cards = {
+                '.bg-primary .card-title': stats.total_alerts || 0,
+                '.bg-danger .card-title': stats.malicious_ips || 0,
+                '.bg-warning .card-title': stats.false_positive || 0,
+                '.bg-success .card-title': stats.safe_ips || 0
+            };
+            
+            Object.entries(cards).forEach(([selector, value]) => {
+                $(selector).text(value);
+            });
+        }
+
+        function updateTables(results, parsed_ips) {
+            // Destroy existing DataTables
+            if ($.fn.DataTable.isDataTable('#tabelAncaman')) {
+                $('#tabelAncaman').DataTable().destroy();
+            }
+            if ($.fn.DataTable.isDataTable('#tabelRingkasan')) {
+                $('#tabelRingkasan').DataTable().destroy();
+            }
+            
+            // Update table content
+            updateMainTable(results);
+            updateSummaryTable(parsed_ips);
+            
+            // Reinitialize DataTables
+            initializeDataTables();
+        }
+
+        function updateMainTable(results) {
+            const tbody = $('#tabelAncaman tbody');
+            tbody.empty();
+
+            // Urutkan berdasarkan timestamp terbaru (descending)
+            results.sort(function(a, b) {
+                // Pastikan timestamp ada dan valid
+                const tA = Date.parse(a.timestamp || '') || 0;
+                const tB = Date.parse(b.timestamp || '') || 0;
+                return tB - tA;
+            });
+
+            results.forEach(function(result) {
+                const row = createMainTableRow(result);
+                tbody.append(row);
+            });
+        }
+
+        function updateSummaryTable(parsed_ips) {
+            const tbody = $('#tabelRingkasan tbody');
+            tbody.empty();
+
+            // Urutkan berdasarkan timestamp terbaru jika ada, jika tidak urutkan berdasarkan value
+            parsed_ips.sort(function(a, b) {
+                const tA = Date.parse(a.timestamp || '') || 0;
+                const tB = Date.parse(b.timestamp || '') || 0;
+                // Jika timestamp sama atau tidak ada, urutkan berdasarkan value (optional)
+                if (tB - tA === 0) {
+                    return (b.value || '').localeCompare(a.value || '');
+                }
+                return tB - tA;
+            });
+
+            parsed_ips.forEach(function(ip) {
+                const row = createSummaryTableRow(ip);
+                tbody.append(row);
+            });
+        }
+
+        function createMainTableRow(result) {
+            const severityClass = `severity-${result.severity}`;
+            const conclusionBadgeClass =
+                result.conclusion === 'Berbahaya' ? 'bg-danger' :
+                result.conclusion === 'False Positive' ? 'bg-warning text-dark' :
+                result.conclusion && result.conclusion.startsWith('Sedang') ? 'badge-sedang' :
+                'bg-success';
+            const conclusionIcon =
+                result.conclusion === 'Berbahaya' ? 'fa-skull-crossbones' :
+                result.conclusion === 'False Positive' ? 'fa-exclamation-triangle' :
+                result.conclusion && result.conclusion.startsWith('Sedang') ? 'fa-exclamation-circle' :
+                'fa-shield-check';
+            
+            return `
+                <tr>
+                    <td>
+                        <div class="ip-address">${result.source_ip}</div>
+                    </td>
+                    <td class="ip-address">${result.destination_ip}</td>
+                    <td>
+                        <span class="badge ${severityClass}">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            ${result.rule}
+                        </span>
+                        <br><small class="text-muted">Tingkat: ${result.severity}</small>
+                    </td>
+                    <td>
+                        <span class="timestamp-text">${result.timestamp}</span>
+                    </td>
+                    <td>
+                        <span class="badge bg-info">
+                            <i class="fas fa-microchip me-1"></i>${result.module.toUpperCase()}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="mb-1">
+                            <strong>AlienVault OTX:</strong> 
+                            <span class="badge ${
+                                result.results.otx === 'Berbahaya' ? 'bg-danger' :
+                                result.results.otx.startsWith('Sedang') ? 'badge-sedang' : 'bg-success'
+                            }">
+                                <i class="fas fa-${
+                                    result.results.otx === 'Berbahaya' ? 'times' :
+                                    result.results.otx.startsWith('Sedang') ? 'exclamation-circle' : 'check'
+                                } me-1"></i>
+                                ${result.results.otx}
+                            </span>
+                        </div>
+                        <div class="mb-1">
+                            <strong>MISP Platform:</strong>
+                            <span class="badge ${
+                                result.results.misp === 'Berbahaya' ? 'bg-danger' :
+                                result.results.misp.startsWith('Sedang') ? 'badge-sedang' : 'bg-success'
+                            }">
+                                <i class="fas fa-${
+                                    result.results.misp === 'Berbahaya' ? 'times' :
+                                    result.results.misp.startsWith('Sedang') ? 'exclamation-circle' : 'check'
+                                } me-1"></i>
+                                ${result.results.misp}
+                            </span>
+                        </div>
+                        <div class="mb-1">
+                            <strong>Kaspersky TI:</strong>
+                            <span class="badge ${
+                                result.results.kaspersky === 'Berbahaya' ? 'bg-danger' :
+                                result.results.kaspersky.startsWith('Sedang') ? 'badge-sedang' : 'bg-success'
+                            }">
+                                <i class="fas fa-${
+                                    result.results.kaspersky === 'Berbahaya' ? 'times' :
+                                    result.results.kaspersky.startsWith('Sedang') ? 'exclamation-circle' : 'check'
+                                } me-1"></i>
+                                ${result.results.kaspersky}
+                            </span>
+                        </div>
+                        ${result.total_malicious ? `
+                        <div class="mt-2">
+                            <span class="validation-score">
+                                <i class="fas fa-chart-bar me-1"></i>Skor: ${result.total_malicious}
+                            </span>
+                        </div>
+                        ` : ''}
+                    </td>
+                    <td class="status-akhir">
+                        <span class="badge fs-6 ${conclusionBadgeClass}">
+                            <i class="fas ${conclusionIcon} me-1"></i>
+                            ${result.conclusion}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="btn-group-vertical btn-group-sm" role="group">
+                            <button class="btn btn-outline-info btn-sm" onclick="lihatDetailIP('${result.source_ip}')">
+                                <i class="fas fa-info-circle me-1"></i>Detail
+                            </button>
+                            ${result.conclusion === 'Berbahaya' ? `
+                            <button class="btn btn-outline-warning btn-sm" onclick="blokAlamatIP('${result.source_ip}')">
+                                <i class="fas fa-ban me-1"></i>Blokir
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" onclick="laporkanAncaman('${result.source_ip}')">
+                                <i class="fas fa-flag me-1"></i>Laporkan
+                            </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
+        function createSummaryTableRow(ip) {
+            const conclusionBadgeClass =
+                ip.conclusion === 'Berbahaya' ? 'bg-danger' :
+                ip.conclusion === 'False Positive' ? 'bg-warning text-dark' :
+                ip.conclusion && ip.conclusion.startsWith('Sedang') ? 'badge-sedang' :
+                'bg-success';
+            const conclusionIcon =
+                ip.conclusion === 'Berbahaya' ? 'fa-skull-crossbones' :
+                ip.conclusion === 'False Positive' ? 'fa-question-circle' :
+                ip.conclusion && ip.conclusion.startsWith('Sedang') ? 'fa-exclamation-circle' :
+                'fa-shield-check';
+            
+            return `
+                <tr>
+                    <td><span class="ip-address">${ip.value}</span></td>
+                    <td>
+                        <span class="badge ${
+                            ip.results.otx === 'Berbahaya' ? 'bg-danger' :
+                            ip.results.otx && ip.results.otx.startsWith('Sedang') ? 'badge-sedang' : 'bg-success'
+                        }">
+                            <i class="fas fa-${
+                                ip.results.otx === 'Berbahaya' ? 'exclamation-triangle' :
+                                ip.results.otx && ip.results.otx.startsWith('Sedang') ? 'exclamation-circle' : 'check-circle'
+                            } me-1"></i>
+                            ${ip.results.otx}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge ${
+                            ip.results.misp === 'Berbahaya' ? 'bg-danger' :
+                            ip.results.misp && ip.results.misp.startsWith('Sedang') ? 'badge-sedang' : 'bg-success'
+                        }">
+                            <i class="fas fa-${
+                                ip.results.misp === 'Berbahaya' ? 'exclamation-triangle' :
+                                ip.results.misp && ip.results.misp.startsWith('Sedang') ? 'exclamation-circle' : 'check-circle'
+                            } me-1"></i>
+                            ${ip.results.misp}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge ${
+                            ip.results.kaspersky === 'Berbahaya' ? 'bg-danger' :
+                            ip.results.kaspersky && ip.results.kaspersky.startsWith('Sedang') ? 'badge-sedang' : 'bg-success'
+                        }">
+                            <i class="fas fa-${
+                                ip.results.kaspersky === 'Berbahaya' ? 'exclamation-triangle' :
+                                ip.results.kaspersky && ip.results.kaspersky.startsWith('Sedang') ? 'exclamation-circle' : 'check-circle'
+                            } me-1"></i>
+                            ${ip.results.kaspersky}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="validation-score">
+                            <i class="fas fa-tachometer-alt me-1"></i>${ip.total_malicious || 0}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge fs-6 ${conclusionBadgeClass}">
+                            <i class="fas ${conclusionIcon} me-1"></i>
+                            ${ip.conclusion}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        }
+
+        function initializeDataTables() {
+            const bahasaIndonesia = {
+                "sEmptyTable": "Tidak ada data yang tersedia dalam tabel",
+                "sInfo": "Menampilkan _START_ hingga _END_ dari _TOTAL_ entri",
+                "sInfoEmpty": "Menampilkan 0 hingga 0 dari 0 entri", 
+                "sInfoFiltered": "(difilter dari _MAX_ total entri)",
+                "sLengthMenu": "Tampilkan _MENU_ entri per halaman",
+                "sLoadingRecords": "Sedang memuat data...",
+                "sProcessing": "Sedang memproses...",
+                "sSearch": "Cari data:",
+                "sZeroRecords": "Tidak ditemukan data yang cocok",
+                "oPaginate": {
+                    "sFirst": "Pertama",
+                    "sLast": "Terakhir", 
+                    "sNext": "Berikutnya",
+                    "sPrevious": "Sebelumnya"
+                }
+            };
+
+            $('#tabelAncaman').DataTable({
+                order: [[6, 'asc']],
+                pageLength: 25,
+                language: bahasaIndonesia,
+                responsive: true,
+                columnDefs: [
+                    { targets: [5, 7], orderable: false },
+                    { targets: 6, orderDataType: 'status-akhir-sort' }
+                ]
+            });
+
+            $('#tabelRingkasan').DataTable({
+                order: [[4, 'desc']],
+                pageLength: 25,
+                language: bahasaIndonesia,
+                responsive: true
+            });
+        }
+
+        function showLoadingIndicator() {
+            $('#lastUpdated').html('<i class="fas fa-spinner fa-spin me-1"></i>Memperbarui...');
+        }
+
+        function hideLoadingIndicator() {
+            // Loading indicator akan hilang ketika lastUpdated diupdate
+        }
+
+        function showSuccessMessage(message) {
+            // Toast notification untuk sukses
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: message,
+                showConfirmButton: false,
+                timer: 3000
+            });
+        }
+
+        function showErrorMessage(message) {
+            // Toast notification untuk error
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'error',
+                title: message,
+                showConfirmButton: false,
+                timer: 5000
+            });
+        }
+
+        function lihatDetailIP(alamatIP) {
+            $('#modalDetailIP').modal('show');
+            $('#isiModalDetail').html(`
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0"><i class="fas fa-globe me-2"></i>Informasi Dasar</h6>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Alamat IP:</strong> <span class="ip-address text-primary">${alamatIP}</span></p>
+                                <p><strong>Status Pemeriksaan:</strong> <span class="badge bg-info">Sedang dianalisis</span></p>
+                                <p><strong>Waktu Pemeriksaan:</strong> ${new Date().toLocaleString('id-ID')}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card border-success">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Sumber Validasi</h6>
+                            </div>
+                            <div class="card-body">
+                                <p>✓ AlienVault OTX</p>
+                                <p>✓ MISP Platform</p>  
+                                <p>✓ Kaspersky Threat Intelligence</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Catatan:</strong> Fitur detail lengkap akan menampilkan informasi geografis, 
+                    riwayat aktivitas, dan analisis mendalam dari alamat IP ini.
+                </div>
+            `);
+        }
+
+        function blokAlamatIP(alamatIP) {
+            if(confirm(`Apakah Anda yakin ingin memblokir alamat IP: ${alamatIP}?\n\nTindakan ini akan mencegah semua koneksi dari IP tersebut.`)) {
+                // Simulasi pemblokiran
+                Swal.fire({
+                    title: 'Memblokir IP...',
+                    text: `Sedang memproses pemblokiran untuk ${alamatIP}`,
+                    icon: 'info',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    Swal.fire({
+                        title: 'Berhasil!',
+                        text: `IP ${alamatIP} telah diblokir dari sistem`,
+                        icon: 'success'
+                    });
+                });
+            }
+        }
+
+        function laporkanAncaman(alamatIP) {
+            if(confirm(`Apakah Anda yakin ingin melaporkan IP: ${alamatIP} sebagai ancaman?\n\nLaporan akan dikirim ke tim keamanan dan pusat threat intelligence.`)) {
+                // Simulasi pelaporan
+                Swal.fire({
+                    title: 'Mengirim Laporan...',
+                    text: `Sedang melaporkan ancaman dari ${alamatIP}`,
+                    icon: 'warning',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    Swal.fire({
+                        title: 'Laporan Terkirim!',
+                        text: `Ancaman dari IP ${alamatIP} telah dilaporkan ke authorities`,
+                        icon: 'success'
+                    });
+                });
+            }
+        }
+
+        function downloadTableCSV() {
+            let csv = [];
+            // Header
+            csv.push([
+                "Alamat IP Sumber",
+                "IP Tujuan",
+                "Jenis Ancaman",
+                "Waktu Validasi",
+                "AlienVault OTX",
+                "MISP Platform",
+                "Kaspersky TI",
+                "Skor",
+                "Status Akhir"
+            ].join(","));
+
+            // Data
+            $('#tabelAncaman tbody tr').each(function() {
+                const $tds = $(this).find('td');
+                if ($tds.length === 7) {
+                    const ipSumber = $tds.eq(0).find('.ip-address').text().trim();
+                    const ipTujuan = $tds.eq(1).text().trim();
+                    const jenisAncaman = $tds.eq(2).text().replace(/\s+/g, ' ').trim();
+                    const waktuValidasi = $tds.eq(3).text().trim();
+                    // Hasil Validasi TI
+                    const otx = $tds.eq(4).find('div').eq(0).text().replace(/AlienVault OTX:/, '').trim();
+                    const misp = $tds.eq(4).find('div').eq(1).text().replace(/MISP Platform:/, '').trim();
+                    const kaspersky = $tds.eq(4).find('div').eq(2).text().replace(/Kaspersky TI:/, '').trim();
+                    const skor = $tds.eq(4).find('.validation-score').text().replace(/Skor:/, '').trim();
+                    const statusAkhir = $tds.eq(5).text().trim();
+                    csv.push([
+                        ipSumber, ipTujuan, jenisAncaman, waktuValidasi,
+                        otx, misp, kaspersky, skor, statusAkhir
+                    ].map(v => `"${v}"`).join(","));
+                }
+            });
+
+            // Download
+            const csvContent = "data:text/csv;charset=utf-8," + csv.join("\n");
+            const link = document.createElement("a");
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", "tabel_validasi_ioc.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+    
+    <!-- Sweet Alert untuk notifikasi yang lebih baik -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</body>
